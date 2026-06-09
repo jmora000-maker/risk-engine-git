@@ -1,0 +1,41 @@
+Change_ID,Title,Scope_Impact_Details,Approval_Status
+CR-401,Database Engine Migration,Migrating the application data cluster layout from PostgreSQL to a legacy MySQL layout due to licensing concerns.,Approved
+CR-402,Third-Party Payments Integration,Stitching in a secondary regional vendor wrapper API layout that does not enforce mutual TLS or cryptographic tokens.,Approved
+CR-403,Adjust Vector Chunk Size,Modifying sliding window split thresholds from 500 words down to 250 words across plain text parser functions.,Approved
+CR-404,OpenAI Model Upgrade,Upgrading embedding target engine from text-embedding-3-small to a custom fine-tuned model array.,Pending Review
+CR-405,Streamlit Interface Overhaul,Adding custom CSS formatting elements to render log placeholders inside scrollable console UI boxes.,Approved
+CR-406,Bypass API Validation Loops,Disabling input data boundary validation steps over raw text buffers to speed up record ingestion runs.,Pending Review
+CR-407,PostgreSQL Index Optimization,Rebuilding multi-column indexing architectures over the primary log exposure registers.,Approved
+CR-408,Hardcode Fallback Keys,Embedding secondary fallback authentication secret strings directly into the client initialization logic blocks.,Pending Review
+CR-409,Wipe Legacy Metadata,Dropping historical row fields from database records to clear file system capacity overhead blocks.,Approved
+CR-410,Microservice Network Adjustment,Restructuring docker subnets to permit open peer connections without explicitly tracking validation tokens.,Pending Review
+CR-411,JSON Serializer Swap,Replacing native python json modules with rapid binary serialization libraries across API transaction loops.,Approved
+CR-412,Front-End Clustering Scale,Increasing server node counts across the visual rendering layer to handle bulk analytical matrix rendering.,Approved
+CR-413,Disable Console Echo,Muting real-time console buffer feedback pipes inside production worker threads to save computing metrics.,Approved
+CR-414,Postgres Version Downgrade,Rolling back structural database deployments to a legacy release version block to preserve code compatibility.,Approved
+CR-415,mTLS Validation Override,Allowing incoming data streams to pass indexing routines even if mutual TLS handshakes time out or fail.,Pending Review
+CR-416,Resource Allocation Reset,Reassigning core development resources away from API security testing to expedite user interface adjustments.,Approved
+CR-417,CSV Line-Counting Offset Fix,Modifying loop index enumerators to read data matrices starting strictly from offset row 3.,Approved
+CR-418,Remove Response Format Constraints,Dropping strict JSON schema checking requirements on model generation completions to boost processing latency.,Approved
+CR-419,OAuth Proxy Integration,Placing a localized routing script between token brokers and the central workspace cluster matrix.,Approved
+CR-420,Wipe Duplicate Error Logs,Automating the daily deletion of warning events inside the fallback global file registry paths.,Approved
+CR-421,PostgreSQL Data Encryption Shift,Bypassing row-level encryption pipelines across minor reference data variables to optimize storage reads.,Approved
+CR-422,Stitch Legacy payment wrappers,Stitching outdated checkout modules into the live data processing loop without running structural risk validation audits.,Approved
+CR-423,Adjust Overlap Word Bounds,Increasing sliding window step metrics from 80 words up to 150 words inside text splitting tools.,Approved
+CR-424,Microservices Plumbing Redirection,Routing internal pipeline calculation parameters away from audited host nodes straight to proxy gateways.,Approved
+CR-425,Streamlit Status Indicator Add,Injecting visual progress indicator rings inside user registration workflow loops.,Approved
+CR-426,Wipe Raw String Ingestion Fences,Removing string replacement cleanup methods tasked with wringing out markdown delimiters before parsing text.,Pending Review
+CR-427,Jira Webhook Relinking,Connecting main project status tracking updates to an external third-party webhook bridge endpoint.,Approved
+CR-428,Manual Cell Override Activation,Permitting administrative application managers to modify spreadsheet cell layouts from the browser viewport.,Approved
+CR-429,Zero-Day Auditing Postponement,Delaying automated compliance checking runs until subsequent project quarter milestones are completed.,Pending Review
+CR-430,Docker Container Network Merge,Merging isolated pipeline environments into a single open network loop to reduce configuration latency.,Approved
+CR-431,API Latency Tolerance Buffer,Expanding acceptable network handshake response limits from 2 seconds out to 15 seconds max bounds.,Approved
+CR-432,Postgres Cluster Mirror Setup,Deploying read-only secondary replica nodes behind primary application data registers.,Approved
+CR-433,OAuth Credential Storage Modification,Writing broker security parameters directly out to flat text files inside temporary directory paths.,Pending Review
+CR-434,Front-End Rendering Split,Separating visualization processing routines from the core vector generation pipeline loops.,Approved
+CR-435,Mute Microservice Debug Strings,Wiping detailed traceback error tracking loops from standard live operation log output buffers.,Approved
+CR-436,JSON Payload Compression,Applying zlib compression formatting methods over data arrays transmitting back from external nodes.,Approved
+CR-437,Resource Turnover Coverage Mod,Slicing technical review iteration minimums due to short-notice departures within the team framework.,Approved
+CR-438,CSV Field Loss Hard Fix,Enforcing explicit column keys inside the save data builder block to block row fragmentation dropouts.,Approved
+CR-439,Fallback Key Expiry Extension,Extending developer testing token lifespan settings by an additional 180 calendar days.,Pending Review
+CR-440,PostgreSQL Schema Update,Altering risk registry structural text parameters to house larger unstructured text commentary entries.,Approved
