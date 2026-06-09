@@ -40,5 +40,9 @@ externalPort = 4200
 localPort = 8507
 externalPort = 5000
 
+[[ports]]
+localPort = 8508
+externalPort = 5173
+
 [nix]
 packages = ["csound"]
