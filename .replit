@@ -9,6 +9,10 @@ localPort = 5000
 externalPort = 6000
 
 [[ports]]
+localPort = 8000
+externalPort = 8000
+
+[[ports]]
 localPort = 8080
 externalPort = 8080
 
@@ -72,5 +76,5 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd scripts/src && streamlit run app.py --server.port 5000"
-waitForPort = 5000
+args = "cd scripts/src && streamlit run app.py --server.port 8000"
+waitForPort = 8000
