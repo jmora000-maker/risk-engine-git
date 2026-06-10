@@ -1,0 +1,22 @@
+kind = "web"
+previewPath = "/"
+title = "Risk Engine"
+version = "1.0.0"
+id = "streamlit-app-risk-engine"
+
+[[services]]
+localPort = 8000
+name = "Streamlit App"
+paths = ["/"]
+
+[services.development]
+run = "cd scripts/src && streamlit run app.py --server.port 8000"
+
+[services.production.build]
+args = ["sh", "-c", "pip install -r scripts/src/requirements.txt"]
+
+[services.production.run]
+args = ["sh", "-c", "cd scripts/src && streamlit run app.py --server.port ${PORT:-8080} --server.address 0.0.0.0"]
+
+[services.production.health.startup]
+path = "/_stcore/health"
