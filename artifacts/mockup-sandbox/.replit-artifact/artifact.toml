@@ -15,3 +15,15 @@ BASE_PATH = "/__mockup"
 
 [services.development]
 run = "pnpm --filter @workspace/mockup-sandbox run dev"
+
+[services.production.build]
+args = ["sh", "-c", "npm install -g pnpm && pnpm --filter @workspace/mockup-sandbox run build"]
+
+[services.production.build.env]
+NODE_ENV = "production"
+PORT = "8081"
+BASE_PATH = "/__mockup"
+
+[services.production]
+serve = "static"
+publicDir = "artifacts/mockup-sandbox/dist"
