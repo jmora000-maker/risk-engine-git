@@ -389,8 +389,8 @@ def main():
 
                         output_lines = [
                             f"[NEW UNREGISTERED RISK]",
-                            f"  SOURCE: {match.get('source')}",
-                            f"  DESCRIPTION: {fields.get('Description', text)}",
+                            f"SOURCE: {match.get('source')}",
+                            f"DESCRIPTION: {fields.get('Description', text)}",
                             "-" * 40
                         ]
 

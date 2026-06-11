@@ -11,7 +11,7 @@ from risk_engine import process_folder, SimpleVectorStore, RiskRegistryMatcher
 
 # --- APP CONFIGURATION ---
 st.set_page_config(page_title="Risk Detection Analytics", layout="wide")
-st.title("Automated Risk Analyst")
+st.title("Automated Risk Audit Dashboard")
 st.markdown("---")
 
 # --- STATE INITIALIZATION ---
@@ -21,23 +21,23 @@ if "logs" not in st.session_state:
     st.session_state.logs = "Ready for execution..."
 
 # --- UI LAYOUT ---
-col1, col2 = st.columns([1, 2])
+col1, col2 = st.columns([1, 1])
 
 with col1:
     target_directory = "../project_folder"
-    st.subheader("Project Folder Path:")
+    st.subheader("1. System Configuration")
     st.text(target_directory)
 
     if os.path.exists(target_directory):
         files = os.listdir(target_directory)
-        st.subheader("Detected Files")
+        st.subheader("2. Control Center")
         st.write(files)
     else:
         st.error("Directory not found.")
 
     start_pipeline = st.button("Execute Risk Audit", type="primary", use_container_width=True)
 
-    st.subheader("Live Operation Logs")
+    st.markdown("**Live Operational Console Logs:**")
     # A persistent container to show logs
     log_placeholder = st.empty()
     log_placeholder.code(st.session_state.logs)
@@ -123,7 +123,7 @@ if start_pipeline:
 
 # --- DISPLAY OUTPUTS ---
 with col2:
-    st.subheader("Unregistered Risk Report")
+    st.subheader("3. Executive Synthesis Workspace")
 
     # 1. Check if the report exists in session state
     if st.session_state.report:
