@@ -1,36 +1,36 @@
 ================================================================================
-UNREGISTERED RISK DISCOVERY REPORT - June 10, 2026
+UNREGISTERED RISK DISCOVERY REPORT - June 13, 2026
 ================================================================================
 
 --- Checking for: staffing turnover ---
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-901
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-901
 Category: Resource
 Observation: The primary resource assigned to front-end rendering components indicated short notice departure from organization.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-911
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-911
 Category: Resource
 Observation: The primary resource assigned to front-end rendering components indicated short notice departure from organization.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: change_log.csv
-  DESCRIPTION: Change_ID: CR-437 | Title: Resource Turnover Coverage Mod | Scope_Impact_Details: Slicing technical review iteration minimums due to short-notice departures within the team framework. | Approval_Status: Approved
+SOURCE: change_log.csv
+DESCRIPTION: Change_ID: CR-437 | Title: Resource Turnover Coverage Mod | Scope_Impact_Details: Slicing technical review iteration minimums due to short-notice departures within the team framework. | Approval_Status: Approved
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-919
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-919
 Category: Resource
 Observation: The primary resource assigned to API dictionary serializers indicated short notice departure from organization.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-909
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-909
 Category: Resource
 Observation: The primary resource assigned to API dictionary serializers indicated short notice departure from organization.
 ----------------------------------------
@@ -38,64 +38,64 @@ Observation: The primary resource assigned to API dictionary serializers indicat
 
 --- Checking for: security vulnerabilities ---
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-912
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-912
 Category: Security
 Observation: System network server monitors caught severe bandwidth choking inside the  mTLS payment endpoint wrappers zone.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-902
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-902
 Category: Security
 Observation: System network server monitors caught severe bandwidth choking inside the  mTLS payment endpoint wrappers zone.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: assumption_log.xlsx
-  DESCRIPTION: Assumed client internal security team wraps all external data handshakes in mTLS encryption tokens.
+SOURCE: assumption_log.xlsx
+DESCRIPTION: Assumed client internal security team wraps all external data handshakes in mTLS encryption tokens.
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: assumption_log.xlsx
-  DESCRIPTION: Assumed client internal security team wraps all external data handshakes in mTLS encryption tokens.
+SOURCE: assumption_log.xlsx
+DESCRIPTION: Assumed client internal security team wraps all external data handshakes in mTLS encryption tokens.
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: assumption_log.xlsx
-  DESCRIPTION: Assumed open-source library package microservice plumbing is fully vetted and patched against mTLS leaks.
+SOURCE: assumption_log.xlsx
+DESCRIPTION: Assumed open-source library package microservice plumbing is fully vetted and patched against mTLS leaks.
 ----------------------------------------
 
 --- Checking for: data pipeline errors ---
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-907
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-907
 Category: Resource
 Observation: Parsing crashes detected inside the vector storage layer when loading raw unverified script executions structures.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-917
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-917
 Category: Resource
 Observation: Parsing crashes detected inside the vector storage layer when loading raw unverified script executions structures.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-913
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-913
 Category: Resource
 Observation: Parsing crashes detected inside the vector storage layer when loading raw PostgreSQL data indexes structures.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-903
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-903
 Category: Resource
 Observation: Parsing crashes detected inside the vector storage layer when loading raw PostgreSQL data indexes structures.
 ----------------------------------------
 ----------------------------------------
 [NEW UNREGISTERED RISK]
-  SOURCE: issue_log.txt
-  DESCRIPTION: Issue ID:ISS-906
+SOURCE: issue_log.txt
+DESCRIPTION: Issue ID:ISS-906
 Category: Security
 Observation: System network server monitors caught severe bandwidth choking inside the CSV file ingestion rows zone.
 ----------------------------------------

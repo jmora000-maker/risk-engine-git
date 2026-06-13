@@ -10,7 +10,7 @@ from datetime import date
 from risk_engine import process_folder, SimpleVectorStore, RiskRegistryMatcher
 
 # --- APP CONFIGURATION ---
-st.set_page_config(page_title="Risk Detection Analytics", layout="wide")
+st.set_page_config(page_title="AI Risk Detection Analytics", layout="wide")
 st.title("Automated Risk Audit Dashboard")
 st.markdown("---")
 
