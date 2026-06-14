@@ -1,13 +1,8 @@
+# Use the official Python slim image
 FROM python:3.11-slim
 
+# Set the working directory inside the container
 WORKDIR /app
-
-# Copy your streamlit app files
-COPY . /app
-
-# If project_folder is outside your streamlit directory locally,
-# you must explicitly copy it into the container image:
-COPY ./project_folder /app/project_folder
 
 # Install standard Linux build tools required by Pandas
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the requirements file from the root folder
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
 
 # DO NOT hardcode ENV PORT. Cloud Run will inject this automatically.
 EXPOSE 8080
