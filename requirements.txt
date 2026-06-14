@@ -4,3 +4,5 @@ requests
 pandas
 openpyxl
 pypdf
+numpy
+openai
