@@ -3,12 +3,13 @@ import os
 import contextlib
 from pathlib import Path
 import json
-import logging
 from datetime import date
 import csv
 import numpy as np
 import pandas as pd
 from openai import OpenAI
+import requests
+import re
 
 # Define paths and global variables
 today = date.today()
@@ -19,6 +20,7 @@ project_root=current_script_dir.parent  #.parent go up one directory level from 
 log_folder = project_root / "logs"
 output_folder = project_root / "outputs"
 project_folder = project_root / "project_folder"
+file_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
 
 # Initialize client
 api_key = os.environ.get("OPENAI_API_KEY")
@@ -185,7 +187,6 @@ def chunk_risk_file(filepath: str) -> list[dict]:
             })
     return chunks
 
-
 # --- CENTRAL DIRECTORY SCANNER FUNCTION ---
 
 # This function scans a directory and processes each file based on its type
@@ -298,7 +299,6 @@ class RiskRegistryMatcher:
         self.register = self._load_register(registered_risks_filepath)
 
     # Load the registered risks from a file
-    #TODO this should be
     def _load_register(self, filepath):
         # Assuming your register is a simple text file of known issues
         with open(filepath, "r") as f:
@@ -365,61 +365,52 @@ def run_risk_audit(store: SimpleVectorStore, matcher: RiskRegistryMatcher, audit
     print(f" -> Analysis loop finished successfully.")
     return audit_results
 
-# TODO update report
-#  --- RESTRUCTURED REPORT WRITER (SILENCED PRINTS) ---
-def generate_audit_report(audit_results: list[dict], file_path: Path, today_str: str) -> str:
-    """
-    Takes structured audit results, writes a formatted presentation report
-    to a physical text file, and returns the full report string for Streamlit display.
-    """
 
-    print(f" -> Performing automated report generation for {len(audit_results)} risk categories...")
+def generate_audit_report(llm_report_text: str, audit_results: list[dict], file_path: Path) -> str:
+    """
+    Takes the AI text, prepends the standardized audit headers and summary metadata,
+    saves the unified report to disk, and returns the final payload.
+    """
+    print(f" -> Re-applying structure and saving report to disk")
 
-    lines = []
+    # Calculate metrics directly from the raw data dictionary list
     total_categories = len(audit_results)
     total_unregistered_risks = sum(len(section.get("discovered_risks", [])) for section in audit_results)
 
+    lines = []
+
     # --- REPORT HEADER ---
+    lines.append("================================================================================")
     lines.append("RISK AUDIT REPORT")
-    lines.append(f"Report Date: {today_str}")
-    lines.append(f"Summary: There were {total_categories} risk categories and {total_unregistered_risks} new risks identified")
+    lines.append(f"Report Date: {today}") # Uses your global 'today' variable safely
+    lines.append(f"Summary: Verified {total_categories} risk categories. Detected {total_unregistered_risks} unregistered anomalies.")
+    lines.append("================================================================================")
     lines.append("")
 
-    unregistered_risks_found = False
+    # --- CLEAN THE # SYMBOLS FROM THE LLM TEXT ---
+    # This loop goes through every line of the AI report and strips out leading # symbols
+    cleaned_llm_lines = []
+    for line in llm_report_text.splitlines():
+        # Regular expression: matches '#' symbols at the beginning of a line, plus any trailing space
+        cleaned_line = re.sub(r'^#+\s*', '', line)
+        cleaned_llm_lines.append(cleaned_line)
 
-    # --- CATEGORY SCANNING LOOP ---
-    for section in audit_results:
-        category = section.get("category", "Unspecified Category")
-        discovered_risks = section.get("discovered_risks", [])
+    # Recombine the cleaned lines back into a single string block
+    cleaned_llm_text = "\n".join(cleaned_llm_lines)
 
-        lines.append(f" --- CATEGORY: {category.upper()} ---")
+    # Append the clean narrative text
+    lines.append(cleaned_llm_text)
 
-        if discovered_risks:
-            for risk in discovered_risks:
-                source = risk.get("source", "Unknown Source")
-                description = risk.get("description", "No description narrative provided.")
-                lines.append(f"SOURCE: {source}")
-                lines.append(f"DESCRIPTION: {description}")
-            lines.append("")  # Uniform padding after category blocks
-        else:
-            lines.append("  > No significant unregistered risks detected in this category.")
-            lines.append("")
-
-    # --- GLOBAL SUMMARY EVALUATION ---
-    if total_unregistered_risks == 0:
-        lines.append("SUMMARY EVALUATION:")
-        lines.append("No new unregistered risks were identified across any analyzed categories.")
-        lines.append("")
-
-    #Combine array elements into a single uniform string object
+    # Combine everything back into a single clean string
     final_report_text = "\n".join(lines).strip()
 
-    # Write cleanly to hard drive persistence layer
+    # Ensure output folder directory target paths exist
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Persist the beautifully formatted document straight to your text layer
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(final_report_text)
 
-    # Return the verified text variable straight to your Streamlit columns session reference
-    # return final_report_text
     return final_report_text
 
 # --- CORE PIPELINE EXECUTION WRAPPER ---
@@ -460,21 +451,84 @@ def run_automated_pipeline(log_placeholder):
             "data pipeline errors, system latency, memory leaks, parsing crashes"
         ]
 
-        # Extract data layout parameters
+        # --- 2. Identifying unregistered risks ---
         discovered_risk_data = run_risk_audit(store, matcher, audit_queries)
 
-        # 3. Generate file on disk AND extract string payload
-        print("STEP 3: Generating Risk Audit Report.")
-        final_report_text = generate_audit_report(discovered_risk_data, file_path, today)
+        # --- 3. Synthesize with LLM ---
+        print("STEP 3: Synthesizing AI Report Narrative.")
+        llm_audit_results = synthesize_report_with_llm(discovered_risk_data)
+
+        # --- 4. Generate file on disk (FIXED CALL HERE) ---
+        print("STEP 4: Generating Structured Risk Audit Report Artifacts.")
+
+        # Pass exactly 3 parameters: the AI string, the raw list data, and the Path object
+        final_report_text = generate_audit_report(llm_audit_results, discovered_risk_data, file_path)
 
         print("PIPELINE COMPLETED.")
-
         return final_report_text
 
     except Exception as e:
         print(f"Pipeline crashed with an unhandled traceback exception: {e}")
 
         return None
+
+# This function is used to synthesize the audit data before reporting
+def synthesize_report_with_llm(audit_results: list[dict]):
+    """
+    Takes the raw unregistered risks and uses GPT to write a professional,
+    cohesive audit narrative.
+    """
+    print(" -> Sending raw risk data to OpenAI for executive synthesis...")
+
+    # Convert our raw findings into a clean string for the AI prompt
+    raw_context = json.dumps(audit_results, indent=2)
+
+    prompt = f"""
+    You are an expert Corporate Risk Auditor. Analyze the following raw data of UNREGISTERED risks 
+    discovered during our system scan. 
+    
+    Compile these findings into a professional, high-level Risk Audit Narrative Report.
+    
+    CRITICAL INSTRUCTION: Do NOT output code, JSON blocks, or structured object tags. 
+    Write this out as a clean, human-readable prose report using regular text headers and bullet points. Do not include am overall report header.
+
+    For each category:
+    1. Summarize the core issues.
+    2. Evaluate the operational impact.
+    3. Offer a brief recommendation.
+
+    Raw Discovered Risk Data:
+    {raw_context}
+    """
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a precise, professional risk management auditor. You write exclusively in clean human-readable narrative text, using standard section headers and bullet points. Never reply with JSON objects.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.3,
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        raw_ai_output = response.json()["choices"][0]["message"][
+            "content"
+        ]  # extract the response text
+        clean_ai_output = (
+            raw_ai_output.replace("```json", "").replace("```", "").strip()
+        )
+        print(" -> Report data extracted from LLM response.")
+        return clean_ai_output
+    else:
+        print(f"DEBUG: API Failed: {response.status_code}")
+        raise Exception(f"API Failed: {response.status_code}")
+
 
 # --- STREAMLIT UI CONFIGURATION ---
 st.set_page_config(
