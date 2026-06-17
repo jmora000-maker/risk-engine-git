@@ -371,7 +371,7 @@ def generate_audit_report(llm_report_text: str, audit_results: list[dict], file_
     Takes the AI text, prepends the standardized audit headers and summary metadata,
     saves the unified report to disk, and returns the final payload.
     """
-    print(f" -> Re-applying structure and saving report to disk")
+    print(f" -> Re-applying structure and saving report to disk.")
 
     # Calculate metrics directly from the raw data dictionary list
     total_categories = len(audit_results)
@@ -485,17 +485,28 @@ def synthesize_report_with_llm(audit_results: list[dict]):
 
     prompt = f"""
     You are an expert Corporate Risk Auditor. Analyze the following raw data of UNREGISTERED risks 
-    discovered during our system scan. 
+    discovered during our recent risk audit. 
     
-    Compile these findings into a professional, high-level Risk Audit Narrative Report.
+    INSTRUCTIONS:
+    Compile these findings into a professional, high-level Risk Audit Report.
     
     CRITICAL INSTRUCTION: Do NOT output code, JSON blocks, or structured object tags. 
-    Write this out as a clean, human-readable prose report using regular text headers and bullet points. Do not include am overall report header.
+    Write this out as a clean, human-readable prose report using regular text headers and bullet points.
+    Do not use markdowns and asterisks.
+    Do not provide a header that is not in the instructions.
+    Do not provide a report header.
+    
+    Use the following report format and [instructions]:
+    
+    EXECUTIVE SUMMARY: 
+    [Summarize the findings of the report in 2 - 3 sentences.]
 
-    For each category:
-    1. Summarize the core issues.
-    2. Evaluate the operational impact.
-    3. Offer a brief recommendation.
+    DETAILED FINDINGS BY CATEGORY
+    
+    [CATEGORY NAME]: [List the category name in all caps without quotations or the bracket.]
+    Core Issue: [Summarize the core issues. Do not use markdowns or asterisks.]
+    Operational Impact: [Evaluate the operational impact. Do not use markdowns or asterisks.[
+    Recommendation: [Offer a brief recommendation to mitigate the issues. Do not use markdowns or asterisks.]
 
     Raw Discovered Risk Data:
     {raw_context}
