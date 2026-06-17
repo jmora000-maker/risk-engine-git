@@ -101,45 +101,140 @@ def chunk_text_file(filepath: str, chunk_size: int = 500, overlap: int = 80) -> 
     return chunks
 
 # For CSV files, reads each row as a separate chunk
-def chunk_csv_file(filepath: str) -> list[dict]:
-    """Reads *.csv spreadsheets and maps each line into a row dictionary asset."""
+def chunk_csv_file(filepath: str, max_field_words: int = 100) -> list[dict]:
+    """
+    Ingests CSV rows defensively by splitting oversized description
+    fields into distinct semantic child chunks with inherited row identity.
+    """
     chunks = []
     filename = os.path.basename(filepath)
 
     with open(filepath, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader, start=2):
-            # Flatten spreadsheet cells into a structured semantic string
-            row_as_text = " | ".join([f"{col}: {val}" for col, val in row.items() if val])
+            # 1. Establish the explicit Parent Identifiers (Anchor Metadata)
+            # Adapt these keys dynamically to match your exact sheet schema headers
+            issue_id = row.get("Issue ID", f"Row_{i}")
+            category = row.get("Category", "General")
 
-            chunks.append({
-                "text": row_as_text,
-                "source": filename,
-                "chunk_id": f"{filename}_row_{i}"
-            })
+            # Formulate a stable identity header block
+            base_anchor = f"Source: {filename} | ID: {issue_id} | Category: {category}"
+
+            # 2. Extract the primary dense narrative field
+            # We target the descriptive columns prone to breaking token spaces
+            description_text = row.get("Description", "").strip()
+
+            # Gather other minor tracking parameters that don't need slicing
+            other_fields = " | ".join([f"{k}: {v}" for k, v in row.items()
+                                       if k not in ["Issue ID", "Category", "Description"] and v])
+
+            # 3. Defensive Evaluation Strategy
+            words = description_text.split()
+
+            if len(words) <= max_field_words:
+                # Row is safely within bounds: compile as a single asset string
+                combined_text = f"{base_anchor} | Description: {description_text}"
+                if other_fields:
+                    combined_text += f" | {other_fields}"
+
+                chunks.append({
+                    "text": combined_text,
+                    "source": filename,
+                    "chunk_id": f"{filename}_row_{i}"
+                })
+            else:
+                # Row breaches safety limits: execute segmented child chunking
+                start = 0
+                slice_idx = 1
+                overlap = 20  # Maintain semantic continuity across text slices
+
+                while start < len(words):
+                    end = min(start + max_field_words, len(words))
+                    text_slice = " ".join(words[start:end])
+
+                    # Glue the parent anchor envelope to the child fragment
+                    sliced_payload = f"{base_anchor} | Description [Part {slice_idx}]: {text_slice}"
+                    if other_fields:
+                        sliced_payload += f" | {other_fields}"
+
+                    chunks.append({
+                        "text": sliced_payload,
+                        "source": filename,
+                        "chunk_id": f"{filename}_row_{i}_slice_{slice_idx}"
+                    })
+
+                    if end >= len(words):
+                        break
+                    start = end - overlap
+                    slice_idx += 1
+
     return chunks
 
 # For Excel files, reads each row as a separate chunk
-def chunk_excel_file(filepath: str) -> list[dict]:
-    """Ingests *.xls and *.xlsx spreadsheets using pandas for structural parsing."""
+def chunk_excel_file(filepath: str, max_field_words: int = 100) -> list[dict]:
+    """
+    Ingests Excel matrices defensively, leveraging pandas vector tracking
+    to enforce uniform word limits across dense text cells.
+    """
     chunks = []
     filename = os.path.basename(filepath)
 
-    # Read the spreadsheet (defaults to the first active worksheet)
     df = pd.read_excel(filepath)
-    # Fill empty data cells (NaN) with empty string blocks to prevent parsing crashes
     df = df.fillna("")
 
     for index, row in df.iterrows():
         row_dict = row.to_dict()
-        # Convert row map variables into a unified semantic sequence string
-        row_as_text = " | ".join([f"{col}: {val}" for col, val in row_dict.items() if val != ""])
+        row_num = index + 2  # Match human-readable line row numbering
 
-        chunks.append({
-            "text": row_as_text,
-            "source": filename,
-            "chunk_id": f"{filename}_row_{index + 2}"  # Accounting for 1-index header maps
-        })
+        # 1. Establish the base structural anchor tracking block
+        issue_id = str(row_dict.get("Issue ID", f"Row_{row_num}")).strip()
+        category = str(row_dict.get("Category", "General")).strip()
+        base_anchor = f"Source: {filename} | ID: {issue_id} | Category: {category}"
+
+        # 2. Extract description narrative safely
+        description_text = str(row_dict.get("Description", "")).strip()
+
+        other_fields = " | ".join([f"{k}: {v}" for k, v in row_dict.items()
+                                   if k not in ["Issue ID", "Category", "Description"] and v != ""])
+
+        words = description_text.split()
+
+        if len(words) <= max_field_words:
+            # Safe payload processing
+            combined_text = f"{base_anchor} | Description: {description_text}"
+            if other_fields:
+                combined_text += f" | {other_fields}"
+
+            chunks.append({
+                "text": combined_text,
+                "source": filename,
+                "chunk_id": f"{filename}_row_{row_num}"
+            })
+        else:
+            # Segmented payload execution
+            start = 0
+            slice_idx = 1
+            overlap = 20
+
+            while start < len(words):
+                end = min(start + max_field_words, len(words))
+                text_slice = " ".join(words[start:end])
+
+                sliced_payload = f"{base_anchor} | Description [Part {slice_idx}]: {text_slice}"
+                if other_fields:
+                    sliced_payload += f" | {other_fields}"
+
+                chunks.append({
+                    "text": sliced_payload,
+                    "source": filename,
+                    "chunk_id": f"{filename}_row_{row_num}_slice_{slice_idx}"
+                })
+
+                if end >= len(words):
+                    break
+                start = end - overlap
+                slice_idx += 1
+
     return chunks
 
 # For structured issue logs, splits by unique issue markers
@@ -224,10 +319,7 @@ def process_folder(folder_path: str, chunk_size: int = 500, overlap: int = 80) -
         file_chunks = []
 
         # Strategic Type Routing Mechanism
-        if file_lower == "test_risk.txt":
-            print(f" -> Chunking risk register: {file}")
-            file_chunks = chunk_risk_file(full_path)
-        elif file_lower == "issue_log.txt":
+        if file_lower == "issue_log.txt":
             print(f" -> Chunking issue log: {file}")
             file_chunks = chunk_issue_log(full_path)
         elif file_lower.endswith(".txt"):
@@ -421,6 +513,7 @@ def run_automated_pipeline(log_placeholder):
     register_path = os.path.join(target_directory, "test_risk.txt")
     file_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
 
+
     # Pipeline Execution
     try:
         print("PIPELINE STARTED.")
@@ -429,14 +522,29 @@ def run_automated_pipeline(log_placeholder):
         print("STEP 1: Creating Vector Store.")
         store = SimpleVectorStore()
 
-        # Chunking documents
-        compiled_data_chunks = process_folder(target_directory, chunk_size=500, overlap=80)
+        if os.path.exists(database_file_destination):
+            print(f" -> Found existing vector store: {database_file_destination}. Loading...")
+            store.load(database_file_destination)
+        else:
+            print(" -> No existing vector store found. Starting new ingestion...")
+            compiled_data_chunks = process_folder(target_directory, chunk_size=500, overlap=80)
 
-        # Converting chunks to embedding vectors
-        store.add_many(compiled_data_chunks)
+            # Converting chunks to embedding vectors
+            store.add_many(compiled_data_chunks)
 
-        # Save vector store to file
-        store.save(database_file_destination)
+            # Save vector store to file
+            store.save(database_file_destination)
+
+            if not compiled_data_chunks:
+                print("No data found to process. Exiting.")
+                return
+
+            # convert chunks ro embedding vectors
+            store.add_many(compiled_data_chunks)
+
+            #save vector store to a file
+            store.save(database_file_destination)
+            print(f" -> Vector store created and saved to {database_file_destination}")
 
         # --- 2. Identifying unregistered risks ---
         print(f"STEP 2: Starting automated risk audit.")
