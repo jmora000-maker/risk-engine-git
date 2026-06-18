@@ -97,6 +97,9 @@ if start_pipeline:
     buffer = io.StringIO()
     VECTOR_STORE_PATH = "global_vector_store.json"
 
+    # Instantiating our core pipeline orchestrator object
+    orchestrator = RiskPipelineOrchestrator(project_root)
+
     with st.spinner("Processing risk parameters..."):
         with contextlib.redirect_stdout(buffer):
             try:

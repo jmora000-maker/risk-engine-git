@@ -1,26 +1,44 @@
-import streamlit as st
-import os
-import contextlib
-from pathlib import Path
-import json
-from datetime import date
 import csv
+import json
+import os
+from datetime import date
+from pathlib import Path
+import contextlib
 import numpy as np
 import pandas as pd
+import streamlit as st
 from openai import OpenAI
-import requests
-import re
+from pydantic import BaseModel, Field
+
+
+# --- PYDANTIC SCHEMAS FOR STRUCTURED OUTPUT ---
+class RiskCategoryReport(BaseModel):
+    category_name: str = Field(description="The risk category name in ALL CAPS (e.g., STAFFING TURNOVER).")
+    core_issue: str = Field(description="A summary of the core risks identified in this category in 2 - 3 sentences.")
+    operational_impact: str = Field(
+        description="An evaluation of the operational consequences and downstream vulnerabilities in 2 - 3 sentences.")
+    recommendation: str = Field(description="A concrete, actionable mitigation recommendation in 2 - 3 sentences.")
+
+
+class ExecutiveRiskReport(BaseModel):
+    executive_summary: str = Field(
+        description="A professional summary of the findings in 2 to 3 sentences.")
+    categories: list[RiskCategoryReport] = Field(
+        description="The detailed findings broken down by specific audited risk categories.")
+
 
 # Define paths and global variables
 today = date.today()
 
-current_script_dir=Path(__file__).resolve().parent
-project_root=current_script_dir.parent  #.parent go up one directory level from script location
-
+current_script_dir = Path(__file__).resolve().parent
+project_root = current_script_dir.parent
 log_folder = project_root / "logs"
 output_folder = project_root / "outputs"
 project_folder = project_root / "project_folder"
-file_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
+
+report_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
+database_file_destination = output_folder / "global_vector_store.json"
+register_path = project_folder / "test_risk.txt"
 
 # Initialize client
 api_key = os.environ.get("OPENAI_API_KEY")
@@ -28,7 +46,6 @@ client = OpenAI(api_key=api_key)
 
 
 # --- UTILITY TO CAPTURE STDOUT ---
-# This class redirects standard output to a Streamlit text component in real-time.
 class StreamlitStdoutRedirector:
     def __init__(self, placeholder):
         self.placeholder = placeholder
@@ -41,13 +58,11 @@ class StreamlitStdoutRedirector:
     def flush(self):
         pass
 
-# --- ADD SCRIPT FUNCTIONS HERE ---
 
 # --- EMBEDDING API CONNECTOR ---
 def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float]:
-    """Fetches high-dimensional numeric coordinates for any text string from OpenAI."""
     cleaned_text = str(text).replace("\n", " ").strip()
-    if not cleaned_text:  # Edge-case catch for blank data rows
+    if not cleaned_text:
         cleaned_text = "Empty row placeholder"
     response = client.embeddings.create(
         input=[cleaned_text],
@@ -55,9 +70,9 @@ def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[floa
     )
     return response.data[0].embedding
 
+
 # --- MATHEMATICAL SIMILARITY CALCULATIONS ---
 def cosine_similarity(v1: list[float], v2: list[float]) -> float:
-    """Measures the mathematical vector proximity metric between coordinate sets."""
     a = np.array(v1)
     b = np.array(v2)
     dot_product = np.dot(a, b)
@@ -67,22 +82,14 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
         return 0.0
     return float(dot_product / (norm_a * norm_b))
 
+
 # --- FILE TYPE-SPECIFIC CHUNKING FUNCTIONS ---
-# Each function handles a specific file format with specialized parsing logic
-# Returns a list of dictionaries containing the chunked text and metadata
-# Metadata includes source filename and unique chunk identifier
-# These functions are called by the process_folder function based on file extension
-
-# For plain text files, splits into word chunks with overlap
-def chunk_text_file(filepath: str, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
-    """Reads standard *.txt files and executes sliding window word chunking."""
-    with open(filepath, "r", encoding="utf-8") as f:
-        text = f.read()
-
+def chunk_text_file(filepath: Path, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
+    text = filepath.read_text(encoding="utf-8")
     words = text.split()
     chunks = []
     start = 0
-    filename = os.path.basename(filepath)
+    filename = filepath.name
 
     while start < len(words):
         end = min(start + chunk_size, len(words))
@@ -100,39 +107,25 @@ def chunk_text_file(filepath: str, chunk_size: int = 500, overlap: int = 80) -> 
 
     return chunks
 
-# For CSV files, reads each row as a separate chunk
-def chunk_csv_file(filepath: str, max_field_words: int = 100) -> list[dict]:
-    """
-    Ingests CSV rows defensively by splitting oversized description
-    fields into distinct semantic child chunks with inherited row identity.
-    """
-    chunks = []
-    filename = os.path.basename(filepath)
 
-    with open(filepath, "r", encoding="utf-8", newline="") as f:
+def chunk_csv_file(filepath: Path, max_field_words: int = 100) -> list[dict]:
+    chunks = []
+    filename = filepath.name
+
+    with filepath.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader, start=2):
-            # 1. Establish the explicit Parent Identifiers (Anchor Metadata)
-            # Adapt these keys dynamically to match your exact sheet schema headers
             issue_id = row.get("Issue ID", f"Row_{i}")
             category = row.get("Category", "General")
-
-            # Formulate a stable identity header block
             base_anchor = f"Source: {filename} | ID: {issue_id} | Category: {category}"
-
-            # 2. Extract the primary dense narrative field
-            # We target the descriptive columns prone to breaking token spaces
             description_text = row.get("Description", "").strip()
 
-            # Gather other minor tracking parameters that don't need slicing
             other_fields = " | ".join([f"{k}: {v}" for k, v in row.items()
                                        if k not in ["Issue ID", "Category", "Description"] and v])
 
-            # 3. Defensive Evaluation Strategy
             words = description_text.split()
 
             if len(words) <= max_field_words:
-                # Row is safely within bounds: compile as a single asset string
                 combined_text = f"{base_anchor} | Description: {description_text}"
                 if other_fields:
                     combined_text += f" | {other_fields}"
@@ -143,16 +136,13 @@ def chunk_csv_file(filepath: str, max_field_words: int = 100) -> list[dict]:
                     "chunk_id": f"{filename}_row_{i}"
                 })
             else:
-                # Row breaches safety limits: execute segmented child chunking
                 start = 0
                 slice_idx = 1
-                overlap = 20  # Maintain semantic continuity across text slices
+                overlap = 20
 
                 while start < len(words):
                     end = min(start + max_field_words, len(words))
                     text_slice = " ".join(words[start:end])
-
-                    # Glue the parent anchor envelope to the child fragment
                     sliced_payload = f"{base_anchor} | Description [Part {slice_idx}]: {text_slice}"
                     if other_fields:
                         sliced_payload += f" | {other_fields}"
@@ -170,91 +160,36 @@ def chunk_csv_file(filepath: str, max_field_words: int = 100) -> list[dict]:
 
     return chunks
 
-# For Excel files, reads each row as a separate chunk
-def chunk_excel_file(filepath: str, max_field_words: int = 100) -> list[dict]:
-    """
-    Ingests Excel matrices defensively, leveraging pandas vector tracking
-    to enforce uniform word limits across dense text cells.
-    """
-    chunks = []
-    filename = os.path.basename(filepath)
 
+def chunk_excel_file(filepath: Path) -> list[dict]:
+    chunks = []
+    filename = filepath.name
     df = pd.read_excel(filepath)
     df = df.fillna("")
 
     for index, row in df.iterrows():
         row_dict = row.to_dict()
-        row_num = index + 2  # Match human-readable line row numbering
+        row_as_text = " | ".join([f"{col}: {val}" for col, val in row_dict.items() if val != ""])
 
-        # 1. Establish the base structural anchor tracking block
-        issue_id = str(row_dict.get("Issue ID", f"Row_{row_num}")).strip()
-        category = str(row_dict.get("Category", "General")).strip()
-        base_anchor = f"Source: {filename} | ID: {issue_id} | Category: {category}"
-
-        # 2. Extract description narrative safely
-        description_text = str(row_dict.get("Description", "")).strip()
-
-        other_fields = " | ".join([f"{k}: {v}" for k, v in row_dict.items()
-                                   if k not in ["Issue ID", "Category", "Description"] and v != ""])
-
-        words = description_text.split()
-
-        if len(words) <= max_field_words:
-            # Safe payload processing
-            combined_text = f"{base_anchor} | Description: {description_text}"
-            if other_fields:
-                combined_text += f" | {other_fields}"
-
-            chunks.append({
-                "text": combined_text,
-                "source": filename,
-                "chunk_id": f"{filename}_row_{row_num}"
-            })
-        else:
-            # Segmented payload execution
-            start = 0
-            slice_idx = 1
-            overlap = 20
-
-            while start < len(words):
-                end = min(start + max_field_words, len(words))
-                text_slice = " ".join(words[start:end])
-
-                sliced_payload = f"{base_anchor} | Description [Part {slice_idx}]: {text_slice}"
-                if other_fields:
-                    sliced_payload += f" | {other_fields}"
-
-                chunks.append({
-                    "text": sliced_payload,
-                    "source": filename,
-                    "chunk_id": f"{filename}_row_{row_num}_slice_{slice_idx}"
-                })
-
-                if end >= len(words):
-                    break
-                start = end - overlap
-                slice_idx += 1
-
+        chunks.append({
+            "text": row_as_text,
+            "source": filename,
+            "chunk_id": f"{filename}_row_{index + 2}"
+        })
     return chunks
 
-# For structured issue logs, splits by unique issue markers
-def chunk_issue_log(filepath: str) -> list[dict]:
-    with open(filepath, "r", encoding="utf-8") as f:
-        text = f.read()
 
-    # Split the file by the unique marker that starts each record
-    # This creates a list where each item is one complete issue
+def chunk_issue_log(filepath: Path) -> list[dict]:
+    text = filepath.read_text(encoding="utf-8")
     raw_records = text.split("Issue ID:")
-
     chunks = []
-    filename = os.path.basename(filepath)
+    filename = filepath.name
 
     for i, record in enumerate(raw_records):
-        if not record.strip(): continue # Skip empty splits
+        if not record.strip():
+            continue
 
-        # Add the marker back so the text makes sense
         chunk_text = f"Issue ID:{record.strip()}"
-
         chunks.append({
             "text": chunk_text,
             "source": filename,
@@ -262,19 +197,15 @@ def chunk_issue_log(filepath: str) -> list[dict]:
         })
     return chunks
 
-# For risk register files, reads each row as a separate chunk
-def chunk_risk_file(filepath: str) -> list[dict]:
-    """Reads the risk register file row-by-row to prevent chunking the entire file at once."""
-    chunks = []
-    filename = os.path.basename(filepath)
 
-    with open(filepath, "r", encoding="utf-8") as f:
-        # Use DictReader if it's CSV-like, otherwise read lines
+def chunk_risk_file(filepath: Path) -> list[dict]:
+    chunks = []
+    filename = filepath.name
+
+    with filepath.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader, start=1):
-            # Create a clean, semantic description for each row
             row_as_text = " | ".join([f"{k}: {v}" for k, v in row.items() if v])
-
             chunks.append({
                 "text": row_as_text,
                 "source": filename,
@@ -282,57 +213,41 @@ def chunk_risk_file(filepath: str) -> list[dict]:
             })
     return chunks
 
+
 # --- CENTRAL DIRECTORY SCANNER FUNCTION ---
-
-# This function scans a directory and processes each file based on its type
-# It uses the appropriate chunking function for each file type
-# It returns a list of all chunks from all files in the directory
-
-def process_folder(folder_path: str, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
-    """Scans a specified folder directory path and dynamically routes matched document types."""
-
-    # Define the name of the file to ignore
+def process_folder(folder_path: Path, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
     registry_filename = "test_risk.txt"
-
     all_chunks = []
 
-    if not os.path.exists(folder_path):
-            print(f" -> Directory target folder '{folder_path}' missing. Indexer aborted.")
-            return []
+    if not folder_path.exists():
+        print(f" -> Directory target folder '{folder_path}' missing. Indexer aborted.")
+        return []
 
-    # Read items found inside directory parameters
-    files_in_folder = os.listdir(folder_path)
-
-    for file in files_in_folder:
-        # EXCLUSION LOGIC: Skip the register file
-        if file.lower() == registry_filename.lower():
-            print(f" -> Skipping risk register file: {file}")
+    for file_path in folder_path.iterdir():
+        if file_path.is_dir():
             continue
 
-        full_path = os.path.join(folder_path, file)
-
-        # Guard clause: skip items that are directories
-        if os.path.isdir(full_path):
+        if file_path.name.lower() == registry_filename.lower():
+            print(f" -> Skipping risk register file: {file_path.name}")
             continue
 
-        file_lower = file.lower()
         file_chunks = []
+        file_name_lower = file_path.name.lower()
+        file_suffix = file_path.suffix.lower()
 
-        # Strategic Type Routing Mechanism
-        if file_lower == "issue_log.txt":
-            print(f" -> Chunking issue log: {file}")
-            file_chunks = chunk_issue_log(full_path)
-        elif file_lower.endswith(".txt"):
-            print(f" -> Chunking plain-text document: {file}")
-            file_chunks = chunk_text_file(full_path, chunk_size, overlap)
-        elif file_lower.endswith(".csv"):
-            print(f" -> Chunking comma-separated spreadsheet: {file}")
-            file_chunks = chunk_csv_file(full_path)
-        elif file_lower.endswith(".xlsx") or file_lower.endswith(".xls"):
-            print(f" -> Chunking Excel spreadsheet: {file}")
-            file_chunks = chunk_excel_file(full_path)
+        if file_name_lower == "issue_log.txt":
+            print(f" -> Chunking issue log: {file_path.name}")
+            file_chunks = chunk_issue_log(file_path)
+        elif file_suffix == ".txt":
+            print(f" -> Chunking plain-text document: {file_path.name}")
+            file_chunks = chunk_text_file(file_path, chunk_size, overlap)
+        elif file_suffix == ".csv":
+            print(f" -> Chunking comma-separated spreadsheet: {file_path.name}")
+            file_chunks = chunk_csv_file(file_path)
+        elif file_suffix in [".xlsx", ".xls"]:
+            print(f" -> Chunking Excel spreadsheet: {file_path.name}")
+            file_chunks = chunk_excel_file(file_path)
         else:
-            # Skip unmapped formats (e.g., pdf, zip, png) silently
             continue
 
         all_chunks.extend(file_chunks)
@@ -341,30 +256,24 @@ def process_folder(folder_path: str, chunk_size: int = 500, overlap: int = 80) -
 
 
 # --- VECTOR STORE IMPLEMENTATION ---
-# This class handles the storage and retrieval of vector embeddings
-# It provides methods to add chunks, search for similar chunks, and save the store
 class SimpleVectorStore:
     def __init__(self):
         self.entries = []
 
-    def load(self, filepath: str) -> None:
-        """Loads the vector store entries from a JSON file."""
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
+    def load(self, filepath: Path) -> None:
+        if filepath.exists():
+            with filepath.open("r", encoding="utf-8") as f:
                 self.entries = json.load(f)
-            print(f" -> Vector Store loaded {len(self.entries)} entries from {filepath}")
+            print(f" -> Vector Store loaded {len(self.entries)} entries.")
         else:
-            raise FileNotFoundError(f" Vector store file not found at {filepath}")
+            raise FileNotFoundError(f" Vector store file not found.")
 
-    # Add a single chunk to the store
     def add_many(self, chunks: list[dict]) -> None:
         print(f" -> Sending {len(chunks)} chunks to OpenAI for vector synthesis...")
-        print(f" -> This may take a few moments...")
         for chunk in chunks:
             embedding = get_embedding(chunk["text"])
             self.entries.append({**chunk, "embedding": embedding})
 
-    # Search for similar chunks based on a query
     def search(self, query: str, top_k: int = 3) -> list[dict]:
         query_embedding = get_embedding(query)
         scored = []
@@ -375,53 +284,37 @@ class SimpleVectorStore:
         scored.sort(reverse=True, key=lambda x: x[0])
         return [{**entry, "similarity": round(sim, 4)} for sim, entry in scored[:top_k]]
 
-    # Save the store to a file
-    def save(self, filepath: str) -> None:
-        print(f" -> Saving vector store entries to {filepath}")
-        with open(filepath, "w", encoding="utf-8") as f:
+    def save(self, filepath: Path) -> None:
+        print(f" -> Saving vector store entries.")
+        with filepath.open("w", encoding="utf-8") as f:
             json.dump(self.entries, f, indent=4)
 
+
 # --- RISK REGISTRY MATCHER ---
-# This class handles the comparison of candidate risks against the registered risks
-# It uses embeddings to determine if a candidate risk is already registered
-# It provides a method to check if a candidate risk is unregistered
 class RiskRegistryMatcher:
     def __init__(self, registered_risks_filepath):
-        # Load your master register
         self.register = self._load_register(registered_risks_filepath)
 
-    # Load the registered risks from a file
     def _load_register(self, filepath):
-        # Assuming your register is a simple text file of known issues
         with open(filepath, "r") as f:
             lines = f.readlines()
-        # Create embeddings for each known risk
         return [{"text": line.strip(), "embedding": get_embedding(line.strip())}
                 for line in lines if line.strip()]
 
-    # Check if a candidate risk is unregistered
     def is_unregistered(self, candidate_text, threshold=0.85):
         candidate_embedding = get_embedding(candidate_text)
-
         for known_risk in self.register:
             score = cosine_similarity(candidate_embedding, known_risk["embedding"])
-            # If similarity is high, it's already registered
             if score >= threshold:
-                return False, score # Found a match
-
-        return True, 0.0 # No match found, it's unregistered
+                return False, score
+        return True, 0.0
 
 
 def run_risk_audit(store: SimpleVectorStore, matcher: RiskRegistryMatcher, audit_queries: list[str]) -> list[dict]:
-    """
-    Executes the semantic analysis against risk categories.
-    Returns a structured collection of newly discovered unregistered risks.
-    """
     audit_results = []
 
     for query in audit_queries:
         category_name = query.split(',')[0].strip()
-        # Clean progress markers for StreamlitStdoutRedirector capture
         print(f" -> Scanning Vector Space for Category: '{category_name.upper()}'")
 
         category_data = {
@@ -429,12 +322,9 @@ def run_risk_audit(store: SimpleVectorStore, matcher: RiskRegistryMatcher, audit
             "discovered_risks": []
         }
 
-        # Search vector store for context matching the query parameters
         results = store.search(query, top_k=5)
-
         new_count = 0
         for match in results:
-            # Check similarity threshold alignment
             is_new, score = matcher.is_unregistered(match["text"]) if matcher else (True, 0.0)
 
             if is_new:
@@ -442,7 +332,6 @@ def run_risk_audit(store: SimpleVectorStore, matcher: RiskRegistryMatcher, audit
                 text = match.get("text", "")
                 source_doc = match.get("source", "Unknown Source")
 
-                # Safely parse back CSV/Excel row key-value string chunks
                 fields = {part.split(": ")[0].strip(): part.split(": ")[1].strip()
                           for part in text.split(" | ") if ": " in part}
 
@@ -458,14 +347,14 @@ def run_risk_audit(store: SimpleVectorStore, matcher: RiskRegistryMatcher, audit
     return audit_results
 
 
-def generate_audit_report(llm_report_text: str, audit_results: list[dict], file_path: Path) -> str:
+# --- REFACTORED REPORT GENERATION VIA PYDANTIC TARGETS ---
+def generate_audit_report(structured_report: ExecutiveRiskReport, audit_results: list[dict], file_path: Path) -> str:
     """
-    Takes the AI text, prepends the standardized audit headers and summary metadata,
-    saves the unified report to disk, and returns the final payload.
+    Accepts the validated Pydantic model directly, constructs the text artifact,
+    persists it to the file path destination, and returns the final string payload.
     """
     print(f" -> Re-applying structure and saving report to disk.")
 
-    # Calculate metrics directly from the raw data dictionary list
     total_categories = len(audit_results)
     total_unregistered_risks = sum(len(section.get("discovered_risks", [])) for section in audit_results)
 
@@ -474,47 +363,76 @@ def generate_audit_report(llm_report_text: str, audit_results: list[dict], file_
     # --- REPORT HEADER ---
     lines.append("================================================================================")
     lines.append("RISK AUDIT REPORT")
-    lines.append(f"Report Date: {today}") # Uses your global 'today' variable safely
-    lines.append(f"Summary: Verified {total_categories} risk categories. Detected {total_unregistered_risks} unregistered anomalies.")
+    lines.append(f"Report Date: {today}")
+    lines.append(
+        f"Summary: Verified {total_categories} risk categories. Detected {total_unregistered_risks} unregistered anomalies.")
     lines.append("================================================================================")
     lines.append("")
 
-    # --- CLEAN THE # SYMBOLS FROM THE LLM TEXT ---
-    # This loop goes through every line of the AI report and strips out leading # symbols
-    cleaned_llm_lines = []
-    for line in llm_report_text.splitlines():
-        # Regular expression: matches '#' symbols at the beginning of a line, plus any trailing space
-        cleaned_line = re.sub(r'^#+\s*', '', line)
-        cleaned_llm_lines.append(cleaned_line)
+    # --- PARSE STRUCTURED EXECUTIVE CONTENT ---
+    lines.append("EXECUTIVE SUMMARY:")
+    lines.append(structured_report.executive_summary)
+    lines.append("")
+    lines.append("DETAILED FINDINGS BY CATEGORY")
+    lines.append("")
 
-    # Recombine the cleaned lines back into a single string block
-    cleaned_llm_text = "\n".join(cleaned_llm_lines)
+    for report_item in structured_report.categories:
+        lines.append(f"{report_item.category_name}:")
+        lines.append(f"  • Core Issue: {report_item.core_issue}")
+        lines.append(f"  • Operational Impact: {report_item.operational_impact}")
+        lines.append(f"  • Recommendation: {report_item.recommendation}")
+        lines.append("")
 
-    # Append the clean narrative text
-    lines.append(cleaned_llm_text)
-
-    # Combine everything back into a single clean string
     final_report_text = "\n".join(lines).strip()
 
-    # Ensure output folder directory target paths exist
+    # Ensure target paths exist
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Persist the beautifully formatted document straight to your text layer
+    # Persist artifact
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(final_report_text)
 
     return final_report_text
 
+
+# --- REFACTORED WORKFLOW ROUTER WITH PYDANTIC PARSING ---
+def synthesize_report_with_llm(audit_results: list[dict]) -> ExecutiveRiskReport:
+    """
+    Takes raw unregistered risks and leverages OpenAI's structured output beta mechanics
+    to return a strictly checked Pydantic model representation.
+    """
+    print(" -> Sending raw risk data to OpenAI for structural executive synthesis...")
+
+    raw_context = json.dumps(audit_results, indent=2)
+
+    prompt = f"""
+    You are an expert Senior Project Leader. Analyze the following raw data of UNREGISTERED risks 
+    discovered during the recent risk audit. 
+
+    Raw Discovered Risk Data:
+    {raw_context}
+    """
+
+    # We leverage beta.chat.completions.parse to enforce Pydantic parsing at the API wire layer
+    response = client.beta.chat.completions.parse(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise, professional Senior Project Leader. Extract risk anomalies into the required schema structure cleanly without markdown text wraps.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        response_format=ExecutiveRiskReport,
+        temperature=0.3,
+    )
+
+    # This returns the initialized ExecutiveRiskReport object directly
+    return response.choices[0].message.parsed
+
+
 # --- CORE PIPELINE EXECUTION WRAPPER ---
 def run_automated_pipeline(log_placeholder):
-    # --- 1. CONFIGURATION ---
-    target_directory = project_folder
-    database_file_destination = "global_vector_store.json"
-    register_path = os.path.join(target_directory, "test_risk.txt")
-    file_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
-
-
-    # Pipeline Execution
     try:
         print("PIPELINE STARTED.")
 
@@ -522,33 +440,24 @@ def run_automated_pipeline(log_placeholder):
         print("STEP 1: Creating Vector Store.")
         store = SimpleVectorStore()
 
-        if os.path.exists(database_file_destination):
-            print(f" -> Found existing vector store: {database_file_destination}. Loading...")
+        if database_file_destination.exists():
+            print(f" -> Found existing vector store. Loading...")
             store.load(database_file_destination)
         else:
             print(" -> No existing vector store found. Starting new ingestion...")
-            compiled_data_chunks = process_folder(target_directory, chunk_size=500, overlap=80)
-
-            # Converting chunks to embedding vectors
-            store.add_many(compiled_data_chunks)
-
-            # Save vector store to file
-            store.save(database_file_destination)
+            compiled_data_chunks = process_folder(project_folder, chunk_size=500, overlap=80)
 
             if not compiled_data_chunks:
                 print("No data found to process. Exiting.")
                 return
 
-            # convert chunks ro embedding vectors
             store.add_many(compiled_data_chunks)
-
-            #save vector store to a file
             store.save(database_file_destination)
             print(f" -> Vector store created and saved to {database_file_destination}")
 
         # --- 2. Identifying unregistered risks ---
         print(f"STEP 2: Starting automated risk audit.")
-        matcher = RiskRegistryMatcher(register_path) if os.path.exists(register_path) else None
+        matcher = RiskRegistryMatcher(register_path) if register_path.exists() else None
 
         if not matcher:
             print(f"Warning: Register not found at {register_path}. Skipping registration check.")
@@ -559,18 +468,16 @@ def run_automated_pipeline(log_placeholder):
             "data pipeline errors, system latency, memory leaks, parsing crashes"
         ]
 
-        # --- 2. Identifying unregistered risks ---
         discovered_risk_data = run_risk_audit(store, matcher, audit_queries)
 
         # --- 3. Synthesize with LLM ---
-        print("STEP 3: Synthesizing AI Report Narrative.")
-        llm_audit_results = synthesize_report_with_llm(discovered_risk_data)
+        print("STEP 3: Synthesizing AI Report Narrative via Structured Validation.")
+        # Returns an actual Pydantic ExecutiveRiskReport object instance now
+        structured_report_obj = synthesize_report_with_llm(discovered_risk_data)
 
-        # --- 4. Generate file on disk (FIXED CALL HERE) ---
+        # --- 4. Generate file on disk ---
         print("STEP 4: Generating Structured Risk Audit Report Artifacts.")
-
-        # Pass exactly 3 parameters: the AI string, the raw list data, and the Path object
-        final_report_text = generate_audit_report(llm_audit_results, discovered_risk_data, file_path)
+        final_report_text = generate_audit_report(structured_report_obj, discovered_risk_data, report_path)
 
         print("PIPELINE COMPLETED.")
         return final_report_text
@@ -578,75 +485,7 @@ def run_automated_pipeline(log_placeholder):
     except Exception as e:
         print(f"Pipeline crashed with an unhandled traceback exception: {e}")
 
-        return None
-
-# This function is used to synthesize the audit data before reporting
-def synthesize_report_with_llm(audit_results: list[dict]):
-    """
-    Takes the raw unregistered risks and uses GPT to write a professional,
-    cohesive audit narrative.
-    """
-    print(" -> Sending raw risk data to OpenAI for executive synthesis...")
-
-    # Convert our raw findings into a clean string for the AI prompt
-    raw_context = json.dumps(audit_results, indent=2)
-
-    prompt = f"""
-    You are an expert Corporate Risk Auditor. Analyze the following raw data of UNREGISTERED risks 
-    discovered during our recent risk audit. 
-    
-    INSTRUCTIONS:
-    Compile these findings into a professional, high-level Risk Audit Report.
-    
-    CRITICAL INSTRUCTION: Do NOT output code, JSON blocks, or structured object tags. 
-    Write this out as a clean, human-readable prose report using regular text headers and bullet points.
-    Do not use markdowns and asterisks.
-    Do not provide a header that is not in the instructions.
-    Do not provide a report header.
-    
-    Use the following report format and [instructions]:
-    
-    EXECUTIVE SUMMARY: 
-    [Summarize the findings of the report in 2 - 3 sentences.]
-
-    DETAILED FINDINGS BY CATEGORY
-    
-    [CATEGORY NAME]: [List the category name in all caps without quotations or the bracket.]
-    Core Issue: [Summarize the core issues. Do not use markdowns or asterisks.]
-    Operational Impact: [Evaluate the operational impact. Do not use markdowns or asterisks.[
-    Recommendation: [Offer a brief recommendation to mitigate the issues. Do not use markdowns or asterisks.]
-
-    Raw Discovered Risk Data:
-    {raw_context}
-    """
-
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a precise, professional risk management auditor. You write exclusively in clean human-readable narrative text, using standard section headers and bullet points. Never reply with JSON objects.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.3,
-    }
-
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-        raw_ai_output = response.json()["choices"][0]["message"][
-            "content"
-        ]  # extract the response text
-        clean_ai_output = (
-            raw_ai_output.replace("```json", "").replace("```", "").strip()
-        )
-        print(" -> Report data extracted from LLM response.")
-        return clean_ai_output
-    else:
-        print(f"DEBUG: API Failed: {response.status_code}")
-        raise Exception(f"API Failed: {response.status_code}")
+    return None
 
 
 # --- STREAMLIT UI CONFIGURATION ---
@@ -655,16 +494,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# APPLICATION TITLE
 st.title("Risk Audit Dashboard")
 st.markdown("---")
 
-# Split dashboard workspace view evenly into two layout control blocks
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("System Configuration")
-    # 1. Get the directory of app.py
     SCRIPT_DIR = Path(__file__).resolve().parent
     SCRIPTS_DIR = SCRIPT_DIR.parent
     target_directory = SCRIPTS_DIR / "project_folder"
@@ -679,35 +515,25 @@ with col1:
             st.warning("Folders found in 'scripts':")
             st.write(os.listdir(str(SCRIPTS_DIR)))
 
-# Check for files
-
-    # Core system action trigger interface button
     start_pipeline = st.button("Generate Risk Audit Report", use_container_width=True, type="primary")
 
     st.subheader("Pipeline Summary")
-    # Interactive log tracing viewport block
     console_logs = st.empty()
     console_logs.info("Click 'Generate Risk Audit Report' button to begin.")
 
-# Persistent frame layout setup for Column 2 immediately on boot
 with col2:
     st.subheader("Report Workspace")
     report_placeholder = st.empty()
-
-    # Pre-execution placeholder info state setup
     report_placeholder.info("The Risk Audit Report will populate here upon synthesis.")
 
-# Active process handler evaluations
 if start_pipeline:
     redirector = StreamlitStdoutRedirector(console_logs)
 
     with st.spinner("Processing risk parameters..."):
-        # Wrap the stream interceptor strictly around the pipeline engine call
         with contextlib.redirect_stdout(redirector):
             final_narrative = run_automated_pipeline(console_logs)
 
     if final_narrative:
-        # Create a container inside the placeholder to hold both the HTML and the button
         with report_placeholder.container():
             st.html(
                 f"""
