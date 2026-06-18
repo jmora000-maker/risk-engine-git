@@ -6,3 +6,4 @@ openpyxl
 pypdf
 numpy
 openai
+pydantic
