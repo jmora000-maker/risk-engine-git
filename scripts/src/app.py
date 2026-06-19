@@ -10,6 +10,23 @@ import streamlit as st
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+# Define paths and global variables
+today = date.today()
+
+current_script_dir = Path(__file__).parent
+project_root = current_script_dir.parent
+
+log_folder = project_root / "logs"
+output_folder = project_root / "outputs"
+project_folder = project_root / "project_folder"
+
+report_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
+database_file_destination = output_folder / "global_vector_store.json"
+register_path = project_folder / "test_risk.txt"
+
+# Initialize client
+api_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
 
 # --- PYDANTIC SCHEMAS FOR STRUCTURED OUTPUT ---
 class RiskCategoryReport(BaseModel):
@@ -25,25 +42,6 @@ class ExecutiveRiskReport(BaseModel):
         description="A professional summary of the findings in 2 to 3 sentences.")
     categories: list[RiskCategoryReport] = Field(
         description="The detailed findings broken down by specific audited risk categories.")
-
-
-# Define paths and global variables
-today = date.today()
-
-current_script_dir = Path(__file__).resolve().parent
-project_root = current_script_dir.parent
-log_folder = project_root / "logs"
-output_folder = project_root / "outputs"
-project_folder = project_root / "project_folder"
-
-report_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
-database_file_destination = output_folder / "global_vector_store.json"
-register_path = project_folder / "test_risk.txt"
-
-# Initialize client
-api_key = os.environ.get("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key)
-
 
 # --- UTILITY TO CAPTURE STDOUT ---
 class StreamlitStdoutRedirector:
@@ -453,7 +451,6 @@ def run_automated_pipeline(log_placeholder):
 
             store.add_many(compiled_data_chunks)
             store.save(database_file_destination)
-            print(f" -> Vector store created and saved to {database_file_destination}")
 
         # --- 2. Identifying unregistered risks ---
         print(f"STEP 2: Starting automated risk audit.")
@@ -501,9 +498,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("System Configuration")
-    SCRIPT_DIR = Path(__file__).resolve().parent
-    SCRIPTS_DIR = SCRIPT_DIR.parent
-    target_directory = SCRIPTS_DIR / "project_folder"
+    target_directory = project_root / "project_folder"
 
     if target_directory.exists():
         st.text("Files found in 'project_folder':")
@@ -511,9 +506,9 @@ with col1:
         st.write(files)
     else:
         st.error(f"Directory not found")
-        if SCRIPTS_DIR.exists():
+        if project_folder.exists():
             st.warning("Folders found in 'scripts':")
-            st.write(os.listdir(str(SCRIPTS_DIR)))
+            st.write(os.listdir(str(project_folder)))
 
     start_pipeline = st.button("Generate Risk Audit Report", use_container_width=True, type="primary")
 
