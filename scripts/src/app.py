@@ -21,9 +21,10 @@ project_root = current_script_dir.parent
 log_folder = project_root / "logs"
 output_folder = project_root / "outputs"
 project_folder = project_root / "project_folder"
+vector_store_folder = project_root / "vector_store"
 
 report_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
-database_file_destination = output_folder / "global_vector_store.json"
+database_file_destination = vector_store_folder / "global_vector_store.json"
 register_path = project_folder / "test_risk.txt"
 
 # Initialize client
@@ -384,9 +385,6 @@ def generate_audit_report(structured_report: ExecutiveRiskReport, audit_results:
 
     final_report_text = "\n".join(lines).strip()
 
-    # Ensure target paths exist
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-
     # Persist artifact
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(final_report_text)
@@ -440,7 +438,8 @@ def run_automated_pipeline(log_placeholder):
         store = SimpleVectorStore()
 
         if database_file_destination.exists():
-            print(f" -> Found existing vector store. Loading...")
+            print(f" -> Found existing vector store file {database_file_destination.name}.")
+            print("Loading...")
             store.load(database_file_destination)
         else:
             print(" -> No existing vector store found. Starting new ingestion...")
@@ -502,7 +501,7 @@ with col1:
     target_directory = project_root / "project_folder"
 
     if target_directory.exists():
-        st.text("Files found in 'project_folder':")
+        st.text(f"Files found in '{target_directory.name}'")
         # iterdir() yields Path objects; we grab .name for just the filename
         files = [f.name for f in target_directory.iterdir()]
         st.write(files)
