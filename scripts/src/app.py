@@ -11,9 +11,11 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 # Define paths and global variables
-today = date.today()
+# This gives you a datetime object
+today_obj = date.today()
+today = today_obj.strftime("%B %d, %Y")
 
-current_script_dir = Path(__file__).parent
+current_script_dir = Path(__file__).resolve().parent
 project_root = current_script_dir.parent
 
 log_folder = project_root / "logs"
@@ -37,6 +39,7 @@ class RiskCategoryReport(BaseModel):
     recommendation: str = Field(description="A concrete, actionable mitigation recommendation in 2 - 3 sentences.")
 
 
+# Top-level Pydantic model representing the executive report (summary + per-category details)
 class ExecutiveRiskReport(BaseModel):
     executive_summary: str = Field(
         description="A professional summary of the findings in 2 to 3 sentences.")
@@ -56,7 +59,6 @@ class StreamlitStdoutRedirector:
     def flush(self):
         pass
 
-
 # --- EMBEDDING API CONNECTOR ---
 def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float]:
     cleaned_text = str(text).replace("\n", " ").strip()
@@ -68,7 +70,6 @@ def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[floa
     )
     return response.data[0].embedding
 
-
 # --- MATHEMATICAL SIMILARITY CALCULATIONS ---
 def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     a = np.array(v1)
@@ -79,7 +80,6 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     if norm_a == 0 or norm_b == 0:
         return 0.0
     return float(dot_product / (norm_a * norm_b))
-
 
 # --- FILE TYPE-SPECIFIC CHUNKING FUNCTIONS ---
 def chunk_text_file(filepath: Path, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
@@ -286,6 +286,7 @@ class SimpleVectorStore:
         print(f" -> Saving vector store entries.")
         with filepath.open("w", encoding="utf-8") as f:
             json.dump(self.entries, f, indent=4)
+            print(f" -> Vector Store file saved as {filepath.name}")
 
 
 # --- RISK REGISTRY MATCHER ---
@@ -502,13 +503,11 @@ with col1:
 
     if target_directory.exists():
         st.text("Files found in 'project_folder':")
-        files = os.listdir(str(target_directory))
+        # iterdir() yields Path objects; we grab .name for just the filename
+        files = [f.name for f in target_directory.iterdir()]
         st.write(files)
     else:
         st.error(f"Directory not found")
-        if project_folder.exists():
-            st.warning("Folders found in 'scripts':")
-            st.write(os.listdir(str(project_folder)))
 
     start_pipeline = st.button("Generate Risk Audit Report", use_container_width=True, type="primary")
 

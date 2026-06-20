@@ -52,16 +52,18 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
 # Metadata includes source filename and unique chunk identifier
 # These functions are called by the process_folder function based on file extension
 
-# For plain text files, splits into word chunks with overlap
-def chunk_text_file(filepath: str, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
+def chunk_text_file(filepath: Path | str, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
     """Reads standard *.txt files and executes sliding window word chunking."""
-    with open(filepath, "r", encoding="utf-8") as f:
-        text = f.read()
+    # Ensure filepath is a Path object so it works even if a string is passed
+    path = Path(filepath)
+
+    # pathlib handles opening, reading, and closing the file automatically
+    text = path.read_text(encoding="utf-8")
 
     words = text.split()
     chunks = []
     start = 0
-    filename = os.path.basename(filepath)
+    filename = path.name  # Replaces os.path.basename()
 
     while start < len(words):
         end = min(start + chunk_size, len(words))
@@ -80,12 +82,14 @@ def chunk_text_file(filepath: str, chunk_size: int = 500, overlap: int = 80) -> 
     return chunks
 
 # For CSV files, reads each row as a separate chunk
-def chunk_csv_file(filepath: str) -> list[dict]:
+def chunk_csv_file(filepath: Path | str) -> list[dict]:
     """Reads *.csv spreadsheets and maps each line into a row dictionary asset."""
+    path = Path(filepath)
     chunks = []
-    filename = os.path.basename(filepath)
+    filename = path.name  # Replaces os.path.basename()
 
-    with open(filepath, "r", encoding="utf-8", newline="") as f:
+    # path.open() behaves exactly like the built-in open() context manager
+    with path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader, start=2):
             # Flatten spreadsheet cells into a structured semantic string
@@ -96,18 +100,20 @@ def chunk_csv_file(filepath: str) -> list[dict]:
                 "source": filename,
                 "chunk_id": f"{filename}_row_{i}"
             })
+
     return chunks
 
 # For Excel files, reads each row as a separate chunk
-def chunk_excel_file(filepath: str) -> list[dict]:
+def chunk_excel_file(filepath: Path | str) -> list[dict]:
     """Ingests *.xls and *.xlsx spreadsheets using pandas for structural parsing."""
+    path = Path(filepath)
     chunks = []
-    filename = os.path.basename(filepath)
+    filename = path.name  # Replaces os.path.basename()
 
-    # Read the spreadsheet (defaults to the first active worksheet)
-    df = pd.read_excel(filepath)
+    # Pandas inherently supports pathlib.Path objects natively
+    df = pd.read_excel(path)
     # Fill empty data cells (NaN) with empty string blocks to prevent parsing crashes
-    df = df.fillna("") 
+    df = df.fillna("")
 
     for index, row in df.iterrows():
         row_dict = row.to_dict()
@@ -119,22 +125,26 @@ def chunk_excel_file(filepath: str) -> list[dict]:
             "source": filename,
             "chunk_id": f"{filename}_row_{index + 2}"  # Accounting for 1-index header maps
         })
+
     return chunks
 
 # For structured issue logs, splits by unique issue markers
-def chunk_issue_log(filepath: str) -> list[dict]:
-    with open(filepath, "r", encoding="utf-8") as f:
-        text = f.read()
+def chunk_issue_log(filepath: Path | str) -> list[dict]:
+    path = Path(filepath)
+
+    # Safely opens, reads, and closes the file automatically
+    text = path.read_text(encoding="utf-8")
 
     # Split the file by the unique marker that starts each record
     # This creates a list where each item is one complete issue
     raw_records = text.split("Issue ID:")
 
     chunks = []
-    filename = os.path.basename(filepath)
+    filename = path.name  # Replaces os.path.basename()
 
     for i, record in enumerate(raw_records):
-        if not record.strip(): continue # Skip empty splits
+        if not record.strip():
+            continue  # Skip empty splits
 
         # Add the marker back so the text makes sense
         chunk_text = f"Issue ID:{record.strip()}"
@@ -144,16 +154,18 @@ def chunk_issue_log(filepath: str) -> list[dict]:
             "source": filename,
             "chunk_id": f"{filename}_issue_{i}"
         })
+
     return chunks
 
 # For risk register files, reads each row as a separate chunk
-def chunk_risk_file(filepath: str) -> list[dict]:
+def chunk_risk_file(filepath: Path | str) -> list[dict]:
     """Reads the risk register file row-by-row to prevent chunking the entire file at once."""
+    path = Path(filepath)
     chunks = []
-    filename = os.path.basename(filepath)
+    filename = path.name  # Replaces os.path.basename()
 
-    with open(filepath, "r", encoding="utf-8") as f:
-        # Use DictReader if it's CSV-like, otherwise read lines
+    # path.open() streams the file row-by-row, keeping the memory footprint low
+    with path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader, start=1):
             # Create a clean, semantic description for each row
@@ -164,6 +176,7 @@ def chunk_risk_file(filepath: str) -> list[dict]:
                 "source": filename,
                 "chunk_id": f"{filename}_row_{i}"
             })
+
     return chunks
 
 
@@ -173,59 +186,59 @@ def chunk_risk_file(filepath: str) -> list[dict]:
 # It uses the appropriate chunking function for each file type
 # It returns a list of all chunks from all files in the directory
 
-def process_folder(folder_path: str, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
+def process_folder(folder_path: Path | str, chunk_size: int = 500, overlap: int = 80) -> list[dict]:
     """Scans a specified folder directory path and dynamically routes matched document types."""
-
-    # Define the name of the file to ignore
+    folder = Path(folder_path)
     registry_filename = "test_risk.txt"
-
     all_chunks = []
 
-    if not os.path.exists(folder_path):
-            print(f"Directory target folder '{folder_path}' missing. Indexer aborted.")
-            return []
+    # Replaces os.path.exists()
+    if not folder.exists():
+        print(f"Directory target folder '{folder}' missing. Indexer aborted.")
+        return []
 
-    # Read items found inside directory parameters
-    files_in_folder = os.listdir(folder_path)
+    # iterdir() handles listing directory contents natively
+    for file_path in folder.iterdir():
+        # Guard clause: skip subdirectories instantly
+        if not file_path.is_file():
+            continue
 
-    for file in files_in_folder:
+        filename_lower = file_path.name.lower()
+
         # EXCLUSION LOGIC: Skip the register file
-        if file.lower() == registry_filename.lower():
-            print(f"-> Skipping risk register file: {file}")
-            logging.info(f"Skipping risk register file: {file}")
+        if filename_lower == registry_filename.lower():
+            print(f"-> Skipping risk register file: {file_path.name}")
+            logging.info(f"Skipping risk register file: {file_path.name}")
             continue
 
-        full_path = os.path.join(folder_path, file)
-
-        # Guard clause: skip items that are directories
-        if os.path.isdir(full_path):
-            continue
-
-        file_lower = file.lower()
         file_chunks = []
 
         # Strategic Type Routing Mechanism
-        if file_lower == "test_risk.txt":
-            print(f"-> Processing risk register: {file}")
-            logging.info(f"Processing risk register: {file}")
-            file_chunks = chunk_risk_file(full_path)
-        elif file_lower == "issue_log.txt":
-            print(f"-> Processing structured issue log: {file}")
-            logging.info(f"Processing structured issue log: {file}")
-            file_chunks = chunk_issue_log(full_path)
-        elif file_lower.endswith(".txt"):
-            print(f"-> Processing plain-text document: {file}")
-            logging.info(f"Processing plain-text document: {file}")
-            file_chunks = chunk_text_file(full_path, chunk_size, overlap)
-        elif file_lower.endswith(".csv"):
-            print(f"-> Processing comma-separated spreadsheet: {file}")
-            logging.info(f"Processing comma-separated spreadsheet: {file}")
-            file_chunks = chunk_csv_file(full_path)
+        if filename_lower == "test_risk.txt":
+            print(f"-> Processing risk register: {file_path.name}")
+            logging.info(f"Processing risk register: {file_path.name}")
+            file_chunks = chunk_risk_file(file_path)
 
-        elif file_lower.endswith(".xlsx") or file_lower.endswith(".xls"):
-            print(f"-> Processing Excel spreadsheet portfolio matrix: {file}")
-            logging.info(f"Processing Excel spreadsheet portfolio matrix: {file}")
-            file_chunks = chunk_excel_file(full_path)
+        elif filename_lower == "issue_log.txt":
+            print(f"-> Processing structured issue log: {file_path.name}")
+            logging.info(f"Processing structured issue log: {file_path.name}")
+            file_chunks = chunk_issue_log(file_path)
+
+        # .suffix extracts extensions like '.txt' or '.csv' safely (includes the dot)
+        elif file_path.suffix.lower() == ".txt":
+            print(f"-> Processing plain-text document: {file_path.name}")
+            logging.info(f"Processing plain-text document: {file_path.name}")
+            file_chunks = chunk_text_file(file_path, chunk_size, overlap)
+
+        elif file_path.suffix.lower() == ".csv":
+            print(f"-> Processing comma-separated spreadsheet: {file_path.name}")
+            logging.info(f"Processing comma-separated spreadsheet: {file_path.name}")
+            file_chunks = chunk_csv_file(file_path)
+
+        elif file_path.suffix.lower() in (".xlsx", ".xls"):
+            print(f"-> Processing Excel spreadsheet portfolio matrix: {file_path.name}")
+            logging.info(f"Processing Excel spreadsheet portfolio matrix: {file_path.name}")
+            file_chunks = chunk_excel_file(file_path)
 
         else:
             # Skip unmapped formats (e.g., pdf, zip, png) silently
@@ -239,26 +252,72 @@ def process_folder(folder_path: str, chunk_size: int = 500, overlap: int = 80) -
 # --- VECTOR STORE IMPLEMENTATION ---
 # This class handles the storage and retrieval of vector embeddings
 # It provides methods to add chunks, search for similar chunks, and save the store
+Here is the
+refactored
+SimpleVectorStore
+
+
+class using pathlib.
+
+
+For
+the
+load
+method, we
+can
+use
+path.exists() and read
+the
+JSON
+directly
+using
+json.loads(path.read_text()).For
+the
+save
+method, we
+can
+write
+the
+serialized
+JSON
+data
+directly
+to
+the
+file in one
+shot
+using
+path.write_text().
+
+Python
+import json
+import logging
+from pathlib import Path
+
+
 class SimpleVectorStore:
     def __init__(self):
         self.entries = []
 
-    def load(self, filepath: str) -> None:
+    def load(self, filepath: Path | str) -> None:
         """Loads the vector store entries from a JSON file."""
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                self.entries = json.load(f)
-            print(f"Loaded {len(self.entries)} entries from {filepath}")
+        path = Path(filepath)
+
+        # Replaces os.path.exists()
+        if path.exists():
+            # read_text() loads the whole file as a string, which json.loads parses perfectly
+            self.entries = json.loads(path.read_text(encoding="utf-8"))
+            print(f"Loaded {len(self.entries)} entries from {path}")
         else:
-            raise FileNotFoundError(f"Vector store file not found at {filepath}")
+            raise FileNotFoundError(f"Vector store file not found at {path}")
 
     # Add a single chunk to the store
     def add_many(self, chunks: list[dict]) -> None:
         print()
-        print(f"Creating Vector Store...")
-        logging.info(f"Creating Vector Store...")
+        print("Creating Vector Store...")
+        logging.info("Creating Vector Store...")
         print(f"Indexing {len(chunks)} combined context chunks into system memory space.")
-        print(f"This may take a few moments...")
+        print("This may take a few moments...")
         for chunk in chunks:
             embedding = get_embedding(chunk["text"])
             self.entries.append({**chunk, "embedding": embedding})
@@ -276,39 +335,48 @@ class SimpleVectorStore:
         return [{**entry, "similarity": round(sim, 4)} for sim, entry in scored[:top_k]]
 
     # Save the store to a file
-    def save(self, filepath: str) -> None:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(self.entries, f, indent=4)
+    def save(self, filepath: Path | str) -> None:
+        """Saves the vector store entries to a JSON file."""
+        path = Path(filepath)
+
+        # Use json.dumps to stringify the data, then write it in a single line
+        serialized_data = json.dumps(self.entries, indent=4, ensure_ascii=False)
+        path.write_text(serialized_data, encoding="utf-8")
 
 # --- RISK REGISTRY MATCHER ---
 # This class handles the comparison of candidate risks against the registered risks
 # It uses embeddings to determine if a candidate risk is already registered
 # It provides a method to check if a candidate risk is unregistered
 class RiskRegistryMatcher:
-    def __init__(self, registered_risks_filepath):
+    def __init__(self, registered_risks_filepath: Path | str):
         # Load your master register
         self.register = self._load_register(registered_risks_filepath)
 
     # Load the registered risks from a file
-    def _load_register(self, filepath):
-        # Assuming your register is a simple text file of known issues
-        with open(filepath, "r") as f:
-            lines = f.readlines()
+    def _load_register(self, filepath: Path | str) -> list[dict]:
+        path = Path(filepath)
+
+        # read_text() loads the file, splitlines() splits it into a clean list of strings
+        # This automatically strips out standard trailing system newline characters (\n or \r\n)
+        lines = path.read_text(encoding="utf-8").splitlines()
+
         # Create embeddings for each known risk
-        return [{"text": line.strip(), "embedding": get_embedding(line.strip())} 
-                for line in lines if line.strip()]
+        return [
+            {"text": line.strip(), "embedding": get_embedding(line.strip())}
+            for line in lines if line.strip()
+        ]
 
     # Check if a candidate risk is unregistered
-    def is_unregistered(self, candidate_text, threshold=0.85):
+    def is_unregistered(self, candidate_text: str, threshold: float = 0.85) -> tuple[bool, float]:
         candidate_embedding = get_embedding(candidate_text)
 
         for known_risk in self.register:
             score = cosine_similarity(candidate_embedding, known_risk["embedding"])
             # If similarity is high, it's already registered
             if score >= threshold:
-                return False, score # Found a match
+                return False, score  # Found a match
 
-        return True, 0.0 # No match found, it's unregistered
+        return True, 0.0  # No match found, it's unregistered
 
     
 # --- MAIN EXECUTION ---
