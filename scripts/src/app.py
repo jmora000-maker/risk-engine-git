@@ -27,6 +27,10 @@ report_path = output_folder / "UNREGISTERED_RISK_DISCOVERY_REPORT.txt"
 database_file_destination = vector_store_folder / "global_vector_store.json"
 register_path = project_folder / "test_risk.txt"
 
+# Ensure they exist individually
+log_folder.mkdir(parents=True, exist_ok=True)
+vector_store_folder.mkdir(parents=True, exist_ok=True)
+
 # Initialize client
 api_key = os.environ.get("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key)
