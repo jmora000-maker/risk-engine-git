@@ -441,13 +441,18 @@ def run_automated_pipeline(log_placeholder):
         print("STEP 1: Creating Vector Store.")
         store = SimpleVectorStore()
 
+        # 1. Ensure the directory path exists
+        target_dir = database_file_destination.parent
+        if not target_dir.exists():
+            print(f" -> Creating missing directory: {target_dir}")
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+        # 2. Check for the file
         if database_file_destination.exists():
-            print(f" -> Found existing vector store file {database_file_destination.name}.")
-            print(" -> Loading...")
+            print(f" -> Found existing vector store: {database_file_destination.name}")
             store.load(database_file_destination)
         else:
             print(" -> No existing vector store found. Starting new ingestion...")
-            vector_store_folder.mkdir(parents=True, exist_ok=True)
             compiled_data_chunks = process_folder(project_folder, chunk_size=500, overlap=80)
 
             if not compiled_data_chunks:
