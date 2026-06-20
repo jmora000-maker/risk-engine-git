@@ -443,10 +443,11 @@ def run_automated_pipeline(log_placeholder):
 
         if database_file_destination.exists():
             print(f" -> Found existing vector store file {database_file_destination.name}.")
-            print("Loading...")
+            print(" -> Loading...")
             store.load(database_file_destination)
         else:
             print(" -> No existing vector store found. Starting new ingestion...")
+            vector_store_folder.mkdir(parents=True, exist_ok=True)
             compiled_data_chunks = process_folder(project_folder, chunk_size=500, overlap=80)
 
             if not compiled_data_chunks:
