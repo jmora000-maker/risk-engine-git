@@ -502,6 +502,7 @@ st.set_page_config(
 )
 
 st.title("Risk Audit Dashboard")
+st.caption("Predictive semantic auditing to expose undocumented delivery threats hidden within unstructured project artifacts.")
 st.markdown("---")
 
 col1, col2 = st.columns(2)
